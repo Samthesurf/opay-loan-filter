@@ -7,10 +7,13 @@ import androidx.core.content.edit
 /** OPay package on the Play Store. */
 const val OPAY_PACKAGE = "team.opay.pay"
 
-/** Extra loan-app packages the user may also want silenced. Off by default. */
+/** EaseMoni loan app by OPay Microfinance Bank. */
 const val EASEMONI_PACKAGE = "com.loan.cash.credit.easemoni.nigeria"
 
-val DEFAULT_PACKAGES: Set<String> = setOf(OPAY_PACKAGE)
+/** OKash loan app by OPay Microfinance Bank. */
+const val OKASH_PACKAGE = "com.loan.cash.credit.okash.nigeria"
+
+val DEFAULT_PACKAGES: Set<String> = setOf(OPAY_PACKAGE, EASEMONI_PACKAGE, OKASH_PACKAGE)
 
 val DEFAULT_KEYWORDS: List<String> = listOf(
   "loan",
@@ -29,22 +32,32 @@ val DEFAULT_KEYWORDS: List<String> = listOf(
  *
  * A notification is blocked only when it comes from a monitored package
  * AND its title/body contains at least one keyword (case-insensitive).
+ * Pass every text field you extracted in [parts]; they are joined before
+ * matching so a keyword in ANY field triggers the block.
  */
 fun shouldBlock(
   packageName: String,
-  title: String?,
-  text: String?,
+  parts: List<String?>,
   packages: Set<String> = DEFAULT_PACKAGES,
   keywords: List<String> = DEFAULT_KEYWORDS,
 ): Boolean {
   if (packageName !in packages) return false
-  val haystack = ((title ?: "") + " " + (text ?: "")).lowercase()
+  val haystack = parts.filterNotNull().joinToString(" ").lowercase()
   if (haystack.isBlank()) return false
   return keywords.any { kw ->
     val k = kw.trim().lowercase()
     k.isNotEmpty() && haystack.contains(k)
   }
 }
+
+/** Backwards-compatible overload for title + body callers (UI preview, old tests). */
+fun shouldBlock(
+  packageName: String,
+  title: String?,
+  text: String?,
+  packages: Set<String> = DEFAULT_PACKAGES,
+  keywords: List<String> = DEFAULT_KEYWORDS,
+): Boolean = shouldBlock(packageName, listOf(title, text), packages, keywords)
 
 private const val PREFS = "loan_filter_prefs"
 private const val KEY_ENABLED = "filter_enabled"
@@ -71,7 +84,12 @@ fun Context.saveKeywords(keywords: List<String>) {
 
 fun Context.loadPackages(): Set<String> {
   val csv = prefs(this).getString(KEY_PACKAGES, null) ?: return DEFAULT_PACKAGES
-  return csv.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet().ifEmpty { DEFAULT_PACKAGES }
+  val saved = csv.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet().ifEmpty { DEFAULT_PACKAGES }
+  // Migrate installs saved before EaseMoni/OKash were included by default:
+  // if the user never customized (still exactly the old single-package default),
+  // upgrade them to the new default set.
+  if (saved == setOf(OPAY_PACKAGE)) return DEFAULT_PACKAGES
+  return saved
 }
 
 fun Context.savePackages(packages: Set<String>) {

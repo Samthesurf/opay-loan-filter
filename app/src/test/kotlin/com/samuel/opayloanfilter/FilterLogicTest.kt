@@ -28,4 +28,30 @@ class FilterLogicTest {
   fun matchingIsCaseInsensitive() {
     assertTrue(shouldBlock("team.opay.pay", "LOAN", null, pkgs, kws))
   }
+
+  @Test
+  fun loanAsFirstWord_isBlocked() {
+    // Regression: user saw a promo whose first word was literally "Loan".
+    assertTrue(shouldBlock("team.opay.pay", "Loan na wa for you", null, pkgs, kws))
+  }
+
+  @Test
+  fun keywordInAnyPart_isBlocked() {
+    // Promo carrying "Loan ..." in bigText/subText/ticker while EXTRA_TEXT is empty.
+    assertTrue(
+      shouldBlock(
+        "team.opay.pay",
+        listOf("OPay promo", "", "Loan: get instant cash now", null, "ticker loan"),
+        pkgs,
+        kws
+      )
+    )
+  }
+
+  @Test
+  fun easemoniAppLoan_isBlockedWhenMonitored() {
+    val all = setOf("team.opay.pay", EASEMONI_PACKAGE, OKASH_PACKAGE)
+    assertTrue(shouldBlock(EASEMONI_PACKAGE, listOf("Loan offer just for you"), all, kws))
+    assertTrue(shouldBlock(OKASH_PACKAGE, listOf("Loan offer just for you"), all, kws))
+  }
 }
